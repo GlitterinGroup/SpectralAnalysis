@@ -31,7 +31,7 @@ spectral_analysis
 
 
 spectral_analysis.model
------
+-----------------------
 
 
 .. automodule:: spectral_analysis.model.bayes

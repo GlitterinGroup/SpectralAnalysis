@@ -1,5 +1,5 @@
 # SpectralAnalysis
-A toolkit for spectral analysis.
+A toolkit for spectral analysis. See [documentation](https://spectralanalysis.readthedocs.io/en) for more details.
 
 ## Install
 ````python
@@ -13,6 +13,13 @@ SpectralAnalysis/
 ├── setup.py
 ├── README.md
 ├── requirements.txt
+├── docs/
+│   ├── Makefile
+│   ├── make.bat
+│   └── source/
+│       ├── conf.py
+│       ├── index.rst
+│       └── modules.rst
 ├── spectral_analysis/
 │   ├── __init__.py
 │   ├── preprocess.py

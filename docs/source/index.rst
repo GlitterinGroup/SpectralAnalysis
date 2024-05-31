@@ -3,9 +3,10 @@ SpectralAnalysis Documentation
 
 .. toctree::
    :maxdepth: 2
+   :caption: Table of Contents:
 
-   main/README
-   README
+   ../../README.md
+   ../../main/README.md
    modules
 
 Indices and tables
