@@ -5,8 +5,8 @@ SpectralAnalysis Documentation
    :maxdepth: 2
    :caption: Table of Contents:
 
-   ../../README.md
-   ../../main/README.md
+   main_readme
+   readme
    modules
 
 Indices and tables
