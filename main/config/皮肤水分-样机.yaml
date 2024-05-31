@@ -1,0 +1,25 @@
+data:
+  file_name: 皮肤水分-样机.xlsx
+  data_sheet:
+    - 光谱
+    - 光源光谱
+  target_sheet: 理化值
+  target_column: 水分
+  task_type: regression
+
+plot_data: True
+plot_results: True
+
+preprocess: move_avg
+preprocess_params:
+  window_size: 11
+
+feature_selection: PCA
+feature_params:
+  n_components: 25
+
+data_split: spxy
+split_params:
+  test_size: [0.2, 0.3]
+
+model: PLS
