@@ -165,15 +165,15 @@ class Metrics:
 
         Returns:
             Dictionary containing the calculated metrics:
-                'mae': Mean Absolute Error (MAE) on the test set.
-                'mse': Mean Squared Error (MSE) on the test set.
-                'rmse': Root Mean Squared Error (RMSE) on the test set.
-                'r2': Coefficient of Determination (R^2) on the test set.
-                'r': Correlation coefficient (R) between true and predicted values on the test set.
-                'Rc': Regression Coefficient (RC) calculated using true and predicted values from training set.
-                'Rp': Regression Weight (RP) calculated using true and predicted values from test set.
-                'RMSEC': Root Mean Squared Error of Calibration (RMSEC) on the training set.
-                'RMSEP': Root Mean Squared Error of Prediction (RMSEP) on the test set.
+            - 'mae': Mean Absolute Error (MAE) on the test set.
+            - 'mse': Mean Squared Error (MSE) on the test set.
+            - 'rmse': Root Mean Squared Error (RMSE) on the test set.
+            - 'r2': Coefficient of Determination (R^2) on the test set.
+            - 'r': Correlation coefficient (R) between true and predicted values on the test set.
+            - 'Rc': Regression Coefficient (RC) calculated using true and predicted values from training set.
+            - 'Rp': Regression Weight (RP) calculated using true and predicted values from test set.
+            - 'RMSEC': Root Mean Squared Error of Calibration (RMSEC) on the training set.
+            - 'RMSEP': Root Mean Squared Error of Prediction (RMSEP) on the test set.
         """
 
         return {
