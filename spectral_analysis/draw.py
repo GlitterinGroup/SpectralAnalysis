@@ -163,7 +163,7 @@ class Draw:
 
     @staticmethod
     def plot_true_pred_scatter(
-        y_true, y_pred, scores, save_path, save_name, title=None
+        y_true, y_pred, scores, save_path, save_name, title=None, tolerance=None
     ):
         """
         Plot scatter graphs for true vs. predicted values with regression metrics.
@@ -175,6 +175,7 @@ class Draw:
             save_path (str): Directory path to save the plot.
             save_name (str): Filename to save the plot.
             title (str, optional): Title of the plot. Default is None.
+            tolerance (float, optional): Tolerance range for the prediction. Default is None.
 
         Returns:
             None
@@ -183,21 +184,110 @@ class Draw:
         x_max = y_true.max()
 
         fig, ax = plt.subplots()
-        ax.scatter(y_true, y_pred)
+        ax.scatter(y_true, y_pred, alpha=0.6, label="Predicted vs True")
 
         ideal = np.linspace(x_min, x_max, 2)
-        ax.plot(ideal, ideal, color="r", label="Ideal Fit")
+        ax.plot(ideal, ideal, color="green", linestyle="--", label="Ideal Fit")
 
-        z = np.polyfit(y_true, y_pred, 5)
+        z = np.polyfit(y_true, y_pred, 1)
         fit_line = np.polyval(z, [x_min, x_max])
-        ax.plot([x_min, x_max], fit_line, color="blue", label="Model Fit")
+        ax.plot([x_min, x_max], fit_line, color="royalblue", label="Model Fit")
+
+        if tolerance is not None:
+            offset = tolerance * (x_max - x_min)
+
+            upper_bound = ideal + offset
+            lower_bound = ideal - offset
+            ax.plot(
+                ideal,
+                upper_bound,
+                color="green",
+                linestyle=":",
+                alpha=0.5,
+                label=f"Upper Bound (+{tolerance*100}%)",
+            )
+            ax.plot(
+                ideal,
+                lower_bound,
+                color="green",
+                linestyle=":",
+                alpha=0.5,
+                label=f"Lower Bound (-{tolerance*100}%)",
+            )
+            ax.fill_between(ideal, lower_bound, upper_bound, color="green", alpha=0.1)
 
         score_text = f"RMSE = {scores['rmse']:.4f}, MAE = {scores['mae']:.4f}, $R^2$ = {scores['r2']:.4f}"
         ax.text(0.05, 0.9, score_text, transform=ax.transAxes)
 
         ax.set_xlabel("Measured Value")
         ax.set_ylabel("Predicted Value")
-        plt.title(title)
+        if title:
+            plt.title(title)
+        ax.legend()
+
+        plt.savefig(f"{save_path}/{save_name}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+    @staticmethod
+    def plot_train_test_scatter(
+        y_train_true,
+        y_train_pred,
+        y_test_true,
+        y_test_pred,
+        scores,
+        save_path,
+        save_name,
+        title=None,
+    ):
+        """
+        Plot scatter graphs for true vs. predicted values for both training and test sets with regression metrics.
+
+        Args:
+            y_train_true (numpy.ndarray): True values of the training dataset.
+            y_train_pred (numpy.ndarray): Predicted values of the training dataset.
+            y_test_true (numpy.ndarray): True values of the test dataset.
+            y_test_pred (numpy.ndarray): Predicted values of the test dataset.
+            scores (dict): Dictionary containing evaluation scores, e.g., {'Rc': 0.85, 'RMSEC': 0.123, 'Rp': 0.78, 'RMSEP': 0.234}.
+            save_path (str): Directory path where the plot will be saved.
+            save_name (str): Name of the saved plot file (without extension).
+            title (str, optional): Title of the plot. Default is None.
+
+        Returns:
+            None
+        """
+        fig, ax = plt.subplots()
+
+        ax.scatter(
+            y_train_true,
+            y_train_pred,
+            alpha=0.4,
+            label=f"Rc={scores['Rc']:.4f}, RMSEC={scores['RMSEC']:.4f}",
+        )
+
+        ax.scatter(
+            y_test_true,
+            y_test_pred,
+            alpha=0.6,
+            label=f"Rp={scores['Rp']:.4f}, RMSEP={scores['RMSEP']:.4f}",
+        )
+
+        x_min = min(y_train_true.min(), y_test_true.min())
+        x_max = max(y_train_true.max(), y_test_true.max())
+        ideal = np.linspace(x_min, x_max, 2)
+        ax.plot(ideal, ideal, color="green", linestyle="--", label="Ideal Fit")
+
+        z_train = np.polyfit(y_train_true.flatten(), y_train_pred.flatten(), 1)
+        fit_line_train = np.polyval(z_train, [x_min, x_max])
+        ax.plot([x_min, x_max], fit_line_train, color="royalblue", label="Train Fit")
+
+        z_test = np.polyfit(y_test_true.flatten(), y_test_pred.flatten(), 1)
+        fit_line_test = np.polyval(z_test, [x_min, x_max])
+        ax.plot([x_min, x_max], fit_line_test, color="darkorange", label="Test Fit")
+
+        ax.set_xlabel("Measured Value")
+        ax.set_ylabel("Predicted Value")
+        if title:
+            plt.title(title)
         ax.legend()
 
         plt.savefig(f"{save_path}/{save_name}.png", dpi=300, bbox_inches="tight")

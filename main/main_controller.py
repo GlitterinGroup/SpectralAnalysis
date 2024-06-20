@@ -35,9 +35,11 @@ class MainController:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         self.task_name = Path(self.config["data"]["file_name"]).stem
         self.task_type = self.config["data"]["task_type"].lower()
-        self.save_dir = Path(os.path.join(
-            os.path.dirname(__file__), f"./result/{self.task_name}/{timestamp}"
-        ))
+        self.save_dir = Path(
+            os.path.join(
+                os.path.dirname(__file__), f"./result/{self.task_name}/{timestamp}"
+            )
+        )
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_config(self, config_file):
@@ -294,7 +296,7 @@ class MainController:
                 tuple: Data split method name and its parameters.
             """
             if "data_split" in self.config:
-                method_name = self.config["data_split"] + "_split"
+                method_name = self.config["data_split"].lower() + "_split"
                 params = self.config.get("split_params", {})
                 return method_name, params
             return "random_split", {}
@@ -405,61 +407,67 @@ class MainController:
                     model = _get_model(model_name, params)
                     model.train(X_train, y_train)
                     trained_models.append(model)
-            # 返回单个模型或模型列表
-            return trained_models[0] if len(trained_models) == 1 else trained_models
+            return trained_models
         return None
 
-    def model_predict(self, models, X_test):
+    def model_predict(self, models, X_train, X_test):
         """
-        Make predictions using trained models.
+        Perform predictions using given models on training and test data.
 
         Args:
-            models (object or list): Trained model(s).
-            X_test (numpy.ndarray or list): Input feature data for prediction.
+            models (list): List of trained models to use for predictions.
+            X_train (array-like or list): Training data or list of training data batches.
+            X_test (array-like or list): Test data or list of test data batches.
 
         Returns:
-            object or list: Predicted output(s).
+            Tuple[List, List]: Two lists of predictions:
+                all_predictions_train (list): List of predictions on training data by each model.
+                all_predictions (list): List of predictions on test data by each model.
         """
         if models:
-            if isinstance(models, list):
-                # 数据和模型均为list参数
-                all_predictions = []
-                if isinstance(X_test, list):
-                    for model, x_test in zip(models, itertools.cycle(X_test)):
-                        all_predictions.append(model.predict(x_test))
-                else:
-                    # 仅模型为list参数
-                    for model in models:
-                        all_predictions.append(model.predict(X_test))
-                return all_predictions
+            all_predictions_train = []
+            all_predictions = []
+            if isinstance(X_test, list):
+                for model, x_train in zip(models, itertools.cycle(X_train)):
+                    all_predictions_train.append(model.predict(x_train))
+                for model, x_test in zip(models, itertools.cycle(X_test)):
+                    all_predictions.append(model.predict(x_test))
             else:
-                return models.predict(X_test)
-        return None
+                # 仅模型为list参数
+                for model in models:
+                    all_predictions_train.append(model.predict(X_train))
+                    all_predictions.append(model.predict(X_test))
+            return all_predictions_train, all_predictions
+        return None, None
 
-    def get_scores(self, y_true, y_pred):
+    def get_scores(self, y_true_train, y_pred_train, y_true, y_pred):
         """
         Calculate evaluation scores.
 
         Args:
-            y_true (numpy.ndarray or list): True target values.
-            y_pred (numpy.ndarray or list): Predicted values.
+            y_true_train (numpy.ndarray or list): True target values for training data.
+            y_pred_train (numpy.ndarray or list): Predicted values for training data.
+            y_true (numpy.ndarray or list): True target values for test data.
+            y_pred (numpy.ndarray or list): Predicted values for test data.
 
         Returns:
-            dict or list of dicts: Evaluation scores.
+            List[Dict]: List of dictionaries containing evaluation scores for each corresponding pair of `y_true` and `y_pred`.
         """
-        if isinstance(y_pred, list):
-            all_scores = []
-            if isinstance(y_true, list):
-                for y_p, y_t in zip(y_pred, itertools.cycle(y_true)):
-                    scores = Metrics.calculate_metrics(y_t, y_p)
-                    all_scores.append(scores)
-            else:
-                for y_p in y_pred:
-                    scores = Metrics.calculate_metrics(y_true, y_p)
-                    all_scores.append(scores)
-            return all_scores
+        all_scores = []
+        if isinstance(y_true, list):
+            for y_t_tr, y_p_tr, y_t, y_p in zip(
+                itertools.cycle(y_true_train),
+                y_pred_train,
+                itertools.cycle(y_true),
+                y_pred,
+            ):
+                scores = Metrics.calculate_metrics(y_t_tr, y_p_tr, y_t, y_p)
+                all_scores.append(scores)
         else:
-            return Metrics.calculate_metrics(y_true, y_pred)
+            for y_p_tr, y_p in zip(y_pred_train, y_pred):
+                scores = Metrics.calculate_metrics(y_true_train, y_p_tr, y_true, y_p)
+                all_scores.append(scores)
+        return all_scores
 
     def save_results(self, y_true, y_pred, scores):
         """
@@ -475,45 +483,32 @@ class MainController:
         """
         results_path = os.path.join(self.save_dir, "result.csv")
 
-        if isinstance(y_pred, list):
-            # 如果 y_pred 是一个列表
-            all_results = []
-            for idx, (single_y_pred, single_y_true) in enumerate(
-                zip(y_pred, itertools.cycle(y_true))
-            ):
-                # 创建每个模型的 DataFrame
-                single_result_df = pd.DataFrame(
-                    {
-                        "Actual": single_y_true,
-                        "Predicted": single_y_pred,
-                        "Param": idx + 1,
-                    }
-                )
-
-                # 将评分指标作为单独的行保存
-                for metric, value in scores[idx].items():
-                    score_df = pd.DataFrame(
-                        {"Param": [idx + 1], "Metrics": [metric], "Value": [value]}
-                    )
-                    single_result_df = pd.concat(
-                        [single_result_df, score_df], ignore_index=True
-                    )
-                all_results.append(single_result_df)
-
-            # 合并所有结果
-            results_df = pd.concat(all_results, ignore_index=True)
-            results_df["Param"] = results_df["Param"].astype(int)
-
-        else:
-            # 如果 y_pred 不是一个列表
-            results_df = pd.DataFrame({"Actual": y_true, "Predicted": y_pred})
+        all_results = []
+        for idx, (single_y_pred, single_y_true) in enumerate(
+            zip(y_pred, itertools.cycle(y_true))
+        ):
+            # 创建每个模型的 DataFrame
+            single_result_df = pd.DataFrame(
+                {
+                    "Actual": single_y_true,
+                    "Predicted": single_y_pred,
+                    "Param": idx + 1,
+                }
+            )
 
             # 将评分指标作为单独的行保存
-            for metric, value in scores.items():
+            for metric, value in scores[idx].items():
                 score_df = pd.DataFrame(
-                    {"Param": [1], "Metrics": [metric], "Value": [value]}
+                    {"Param": [idx + 1], "Metrics": [metric], "Value": [value]}
                 )
-                results_df = pd.concat([results_df, score_df], ignore_index=True)
+                single_result_df = pd.concat(
+                    [single_result_df, score_df], ignore_index=True
+                )
+            all_results.append(single_result_df)
+
+        # 合并所有结果
+        results_df = pd.concat(all_results, ignore_index=True)
+        results_df["Param"] = results_df["Param"].astype(int)
 
         # 将 config 信息存储在结果文件的最后一行的一个单元格中
         config_str = str(self.config)
@@ -560,20 +555,30 @@ class MainController:
         mean_values.name = "Average"
         results_df = pd.concat([results_df, pd.DataFrame(mean_values).T])
 
+        results_df = results_df.reset_index()
         return results_df
 
-    def draw_results(self, y_true, y_pred, scores):
+    def draw_results(self, y_true_train, y_pred_train, y_true, y_pred, scores):
         """
-        Draw visualizations of the prediction results.
+        Draw various plots based on the results of model predictions and true values.
 
         Args:
+            y_true_train (numpy.ndarray or list): True target values for training data.
+            y_pred_train (numpy.ndarray or list): Predicted values for training data.
             y_true (numpy.ndarray or list): True target values.
             y_pred (numpy.ndarray or list): Predicted values.
-            scores (dict or list of dicts): Evaluation scores.
+            scores (list): List of evaluation scores corresponding to each prediction.
+
+        Notes:
+            - If `y_true` is a list, multiple plots are generated for each subset of true values and predictions.
+              - Line plots (`plot_true_pred_line`) are generated for each subset of `y_true` and corresponding `y_pred`.
+              - Scatter plots (`plot_true_pred_scatter` and `plot_train_test_scatter`) are generated for each subset
+                of `y_true`, `y_pred`, and corresponding `y_true_train`, `y_pred_train`, and scores.
+            - If `y_true` is not a list, a single line plot and multiple scatter plots are generated based on the provided data.
         """
         if self.plot_results:
             if isinstance(y_true, list):
-                # 数据划分多个参数
+                # 数据划分及之前多个参数
                 for i, single_y_true in enumerate(y_true):
                     indices = range(
                         i, len(y_pred), len(y_true)
@@ -583,58 +588,68 @@ class MainController:
                         single_y_true,
                         selected_y_pred,
                         self.save_dir,
-                        f"result_line_{i+1}",
+                        f"result_line_split_{i+1}",
                         self.task_name,
                     )
 
-                if isinstance(y_pred, list):
-                    # 绘制多组预测结果
-                    for idx, (single_y_pred, single_scores, single_y_true) in enumerate(
-                        zip(y_pred, scores, itertools.cycle(y_true))
-                    ):
-                        Draw.plot_true_pred_scatter(
-                            single_y_true,
-                            single_y_pred,
-                            single_scores,
-                            self.save_dir,
-                            f"result_scatter_{idx+1}",
-                            f"{self.task_name}_{idx+1}",
-                        )
-                else:
-                    # 绘制单组预测结果
-                    Draw.plot_true_pred_scatter(
-                        single_y_true,
+                for idx, (
+                    single_y_true_tr,
+                    single_y_pred_tr,
+                    single_y_true,
+                    single_y_pred,
+                    single_scores,
+                ) in enumerate(
+                    zip(
+                        itertools.cycle(y_true_train),
+                        y_pred_train,
+                        itertools.cycle(y_true),
                         y_pred,
                         scores,
+                    )
+                ):
+                    Draw.plot_true_pred_scatter(
+                        single_y_true,
+                        single_y_pred,
+                        single_scores,
                         self.save_dir,
-                        "result_scatter",
-                        f"{self.task_name}",
+                        f"result_scatter_{idx+1}",
+                        f"{self.task_name}_{idx+1}",
+                        0.1,
+                    )
+                    Draw.plot_train_test_scatter(
+                        single_y_true_tr,
+                        single_y_pred_tr,
+                        single_y_true,
+                        single_y_pred,
+                        single_scores,
+                        self.save_dir,
+                        f"train_test_scatter_{idx+1}",
+                        f"{self.task_name}_{idx+1}",
                     )
             else:
                 Draw.plot_true_pred_line(
                     y_true, y_pred, self.save_dir, "result_line", self.task_name
                 )
 
-                if isinstance(y_pred, list):
-                    # 绘制多组预测结果
-                    for idx, (single_y_pred, single_scores) in enumerate(
-                        zip(y_pred, scores)
-                    ):
-                        Draw.plot_true_pred_scatter(
-                            y_true,
-                            single_y_pred,
-                            single_scores,
-                            self.save_dir,
-                            f"result_scatter_{idx+1}",
-                            f"{self.task_name}_{idx+1}",
-                        )
-                else:
-                    # 绘制单组预测结果
+                for idx, (single_y_pred_tr, single_y_pred, single_scores) in enumerate(
+                    zip(y_pred_train, y_pred, scores)
+                ):
                     Draw.plot_true_pred_scatter(
                         y_true,
-                        y_pred,
-                        scores,
+                        single_y_pred,
+                        single_scores,
                         self.save_dir,
-                        "result_scatter",
-                        self.task_name,
+                        f"result_scatter_{idx+1}",
+                        f"{self.task_name}_{idx+1}",
+                        0.1,
+                    )
+                    Draw.plot_train_test_scatter(
+                        y_true_train,
+                        single_y_pred_tr,
+                        y_true,
+                        single_y_pred,
+                        single_scores,
+                        self.save_dir,
+                        f"train_test_scatter_{idx+1}",
+                        f"{self.task_name}_{idx+1}",
                     )

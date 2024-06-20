@@ -44,22 +44,24 @@ def main_flow(config_name):
     trained_model = controller.model_training(X_train, y_train)
 
     # 模型预测
-    predictions = controller.model_predict(trained_model, X_test)
+    predictions_train, predictions = controller.model_predict(
+        trained_model, X_train, X_test
+    )
 
     # 计算指标
-    scores = controller.get_scores(y_test, predictions)
+    scores = controller.get_scores(y_train, predictions_train, y_test, predictions)
 
     # 保存结果
     result_path = controller.save_results(y_test, predictions, scores)
 
     results_df = controller.show_results(result_path)
-    markdown_table = results_df.to_markdown()
+    markdown_table = results_df.to_markdown(index=False)
     print(markdown_table)
 
     # 绘制结果
-    controller.draw_results(y_test, predictions, scores)
+    controller.draw_results(y_train, predictions_train, y_test, predictions, scores)
 
 
 if __name__ == "__main__":
-    config_name = "皮肤水分-样机"   # 修改此处为你的配置文件名
+    config_name = "皮肤水分-样机"  # 修改此处为你的配置文件名
     main_flow(config_name)

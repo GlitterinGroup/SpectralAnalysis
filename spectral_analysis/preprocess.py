@@ -307,6 +307,7 @@ class Preprocess:
 
     # Baseline correction =====================================================
 
+    @staticmethod
     def baseline_iarpls(data, lam=1000):
         """
         Applies the Iterative Asymmetric Reweighted Penalized Least Squares (IARPLS)
@@ -329,6 +330,7 @@ class Preprocess:
 
         return data_iarpls
 
+    @staticmethod
     def baseline_airpls(data, lam=1000):
         """
         Applies the Asymmetric Reweighted Penalized Least Squares (ARPLS)
@@ -351,6 +353,7 @@ class Preprocess:
 
         return data_airpls
 
+    @staticmethod
     def baseline_derpsalsa(data, lam=1000):
         """
         Applies the Derivative Penalized Signal Adaptive Least Squares (DERPSALSA)
