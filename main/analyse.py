@@ -63,5 +63,5 @@ def main_flow(config_name):
 
 
 if __name__ == "__main__":
-    config_name = "皮肤水分-样机"  # 修改此处为你的配置文件名
+    config_name = "样机_芯片2_温昱婷_20240618"  # 修改此处为你的配置文件名
     main_flow(config_name)

@@ -53,7 +53,7 @@ class DataAdapter:
         else:
             raise ValueError(f"Unsupported file extension: {self.ext}")
 
-    def get_feature_and_target(self, data_sheet, target_sheet, target_column):
+    def get_feature_and_target(self, data_sheet, data_transpose, data_start_row, target_sheet, target_column):
         """
         Extract feature and target data from specified sheets.
 
@@ -71,8 +71,12 @@ class DataAdapter:
             )
 
         # Read data from two sheets and perform element-wise division
-        sheet1_data = self.data[data_sheet[0]].to_numpy()
-        sheet2_data = self.data[data_sheet[1]].to_numpy()
+        sheet1_data = self.data[data_sheet[0]][data_start_row:].to_numpy(dtype=float)
+        sheet2_data = self.data[data_sheet[1]][data_start_row:].to_numpy(dtype=float)
+        
+        if data_transpose:
+            sheet1_data = sheet1_data.T
+            sheet2_data = sheet2_data.T
 
         # Ensure both sheets have the same shape for element-wise division
         if sheet1_data.shape != sheet2_data.shape:

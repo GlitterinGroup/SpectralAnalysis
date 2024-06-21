@@ -65,6 +65,8 @@ class MainController:
         adapter = DataAdapter(self.config["data"]["file_name"])
         X, y = adapter.get_feature_and_target(
             data_sheet=self.config["data"]["data_sheet"],
+            data_transpose=self.config["data"].get("data_transpose", False),
+            data_start_row=self.config["data"].get("data_start_row", 0),
             target_sheet=self.config["data"]["target_sheet"],
             target_column=self.config["data"]["target_column"],
         )
@@ -616,7 +618,7 @@ class MainController:
                         f"{self.task_name}_{idx+1}",
                         0.1,
                     )
-                    Draw.plot_train_test_scatter(
+                    Draw.plot_true_pred_scatter_train_test(
                         single_y_true_tr,
                         single_y_pred_tr,
                         single_y_true,
@@ -625,6 +627,7 @@ class MainController:
                         self.save_dir,
                         f"train_test_scatter_{idx+1}",
                         f"{self.task_name}_{idx+1}",
+                        0.1
                     )
             else:
                 Draw.plot_true_pred_line(
@@ -643,7 +646,7 @@ class MainController:
                         f"{self.task_name}_{idx+1}",
                         0.1,
                     )
-                    Draw.plot_train_test_scatter(
+                    Draw.plot_true_pred_scatter_train_test(
                         y_true_train,
                         single_y_pred_tr,
                         y_true,
@@ -652,4 +655,5 @@ class MainController:
                         self.save_dir,
                         f"train_test_scatter_{idx+1}",
                         f"{self.task_name}_{idx+1}",
+                        0.1
                     )

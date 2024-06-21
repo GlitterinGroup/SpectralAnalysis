@@ -189,9 +189,9 @@ class Draw:
         ideal = np.linspace(x_min, x_max, 2)
         ax.plot(ideal, ideal, color="green", linestyle="--", label="Ideal Fit")
 
-        z = np.polyfit(y_true, y_pred, 1)
-        fit_line = np.polyval(z, [x_min, x_max])
-        ax.plot([x_min, x_max], fit_line, color="royalblue", label="Model Fit")
+        # z = np.polyfit(y_true, y_pred, 1)
+        # fit_line = np.polyval(z, [x_min, x_max])
+        # ax.plot([x_min, x_max], fit_line, color="royalblue", label="Model Fit")
 
         if tolerance is not None:
             offset = tolerance * (x_max - x_min)
@@ -229,7 +229,7 @@ class Draw:
         plt.close()
 
     @staticmethod
-    def plot_train_test_scatter(
+    def plot_true_pred_scatter_train_test(
         y_train_true,
         y_train_pred,
         y_test_true,
@@ -238,6 +238,7 @@ class Draw:
         save_path,
         save_name,
         title=None,
+        tolerance=None,
     ):
         """
         Plot scatter graphs for true vs. predicted values for both training and test sets with regression metrics.
@@ -251,6 +252,7 @@ class Draw:
             save_path (str): Directory path where the plot will be saved.
             save_name (str): Name of the saved plot file (without extension).
             title (str, optional): Title of the plot. Default is None.
+            tolerance (float, optional): Tolerance range for the prediction. Default is None.
 
         Returns:
             None
@@ -275,6 +277,29 @@ class Draw:
         x_max = max(y_train_true.max(), y_test_true.max())
         ideal = np.linspace(x_min, x_max, 2)
         ax.plot(ideal, ideal, color="green", linestyle="--", label="Ideal Fit")
+
+        if tolerance is not None:
+            offset = tolerance * (x_max - x_min)
+
+            upper_bound = ideal + offset
+            lower_bound = ideal - offset
+            ax.plot(
+                ideal,
+                upper_bound,
+                color="green",
+                linestyle=":",
+                alpha=0.5,
+                # label=f"Upper Bound (+{tolerance*100}%)",
+            )
+            ax.plot(
+                ideal,
+                lower_bound,
+                color="green",
+                linestyle=":",
+                alpha=0.5,
+                # label=f"Lower Bound (-{tolerance*100}%)",
+            )
+            ax.fill_between(ideal, lower_bound, upper_bound, color="green", alpha=0.1)
 
         z_train = np.polyfit(y_train_true.flatten(), y_train_pred.flatten(), 1)
         fit_line_train = np.polyval(z_train, [x_min, x_max])
