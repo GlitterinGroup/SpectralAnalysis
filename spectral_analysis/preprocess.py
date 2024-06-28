@@ -5,12 +5,17 @@ import pandas as pd
 from obspy.signal.detrend import polynomial
 from pybaselines.whittaker import airpls, derpsalsa, iarpls
 from scipy.signal import savgol_filter
+from scipy.stats import f
+from sklearn.cross_decomposition import PLSRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import KFold, cross_val_predict
 
 
 class Preprocess:
     """
     A collection of preprocessing methods for spectral data.
     """
+
     @staticmethod
     def mean_centering(data, axis=None):
         """
@@ -131,7 +136,7 @@ class Preprocess:
         Applies the Savitzky-Golay filter to smooth and differentiate data.
 
         Args:
-            data (numpy.ndarray): The input data array to be smoothed and differentiated, with 
+            data (numpy.ndarray): The input data array to be smoothed and differentiated, with
                 shape (n_samples, n_features).
             window_len (int, optional): The length of the filter window (i.e., the number of coefficients).
                 Must be a positive odd integer. Defaults to 11.
@@ -200,7 +205,7 @@ class Preprocess:
         Args:
             data (numpy.ndarray or list): The input data array to be transformed,
                 with shape (n_samples, n_features).
-            percent (int): The percentile value for the transformation, 
+            percent (int): The percentile value for the transformation,
                 typically between 0 and 100. Defaults to 25.
 
         Returns:
@@ -243,11 +248,11 @@ class Preprocess:
         Computes the first derivative of the given data.
 
         Args:
-            data (numpy.ndarray): The input raw spectrum data, 
+            data (numpy.ndarray): The input raw spectrum data,
                 with shape (n_samples, n_features).
 
         Returns:
-            numpy.ndarray: The first derivative of the data, 
+            numpy.ndarray: The first derivative of the data,
                 with shape (n_samples, n_features-1).
         """
         n, p = data.shape
@@ -266,7 +271,7 @@ class Preprocess:
                 with shape (n_samples, n_features).
 
         Returns:
-            numpy.ndarray: The second derivative of the data, 
+            numpy.ndarray: The second derivative of the data,
                 with shape (n_samples, n_features-2).
         """
         data = copy.deepcopy(data)
@@ -284,9 +289,9 @@ class Preprocess:
         Applies moving average filtering to the given data.
 
         Args:
-            data (numpy.ndarray): The input raw spectrum data, 
+            data (numpy.ndarray): The input raw spectrum data,
                 with shape (n_samples, n_features).
-            window_size (int, optional): The size of the moving window, 
+            window_size (int, optional): The size of the moving window,
                 must be an odd number. Defaults to 11.
 
         Returns:
@@ -314,13 +319,13 @@ class Preprocess:
         baseline correction method to the given data.
 
         Args:
-            data (numpy.ndarray): The input data array to be baseline corrected, 
+            data (numpy.ndarray): The input data array to be baseline corrected,
                 with shape (n_samples, n_features).
             lam (int, optional): The smoothing parameter for the IARPLS method.
                 Defaults to 1000.
 
         Returns:
-            numpy.ndarray: The baseline-corrected data array with the same shape 
+            numpy.ndarray: The baseline-corrected data array with the same shape
             as the input data.
         """
         data_iarpls = copy.deepcopy(data)
@@ -337,13 +342,13 @@ class Preprocess:
         baseline correction method to the given data.
 
         Args:
-            data (numpy.ndarray): The input data array to be baseline corrected, 
+            data (numpy.ndarray): The input data array to be baseline corrected,
                 with shape (n_samples, n_features).
             lam (int, optional): The smoothing parameter for the ARPLS method.
                 Defaults to 1000.
 
         Returns:
-            numpy.ndarray: The baseline-corrected data array with the same shape 
+            numpy.ndarray: The baseline-corrected data array with the same shape
             as the input data.
         """
         data_airpls = copy.deepcopy(data)
@@ -360,13 +365,13 @@ class Preprocess:
         baseline correction method to the given data.
 
         Args:
-            data (numpy.ndarray): The input data array to be baseline corrected, 
+            data (numpy.ndarray): The input data array to be baseline corrected,
                 with shape (n_samples, n_features).
             lam (int, optional): The smoothing parameter for the DERPSALSA method.
                 Defaults to 1000.
 
         Returns:
-            numpy.ndarray: The baseline-corrected data array with the same shape 
+            numpy.ndarray: The baseline-corrected data array with the same shape
             as the input data.
         """
         data_derpsalsa = copy.deepcopy(data)
@@ -375,3 +380,128 @@ class Preprocess:
             data_derpsalsa[k, :] = data_derpsalsa[k, :] - baseline
 
         return data_derpsalsa
+
+    # Outlier remove =====================================================
+
+    @staticmethod
+    def mahalanobis(mahal_X, y, threshold=95):
+        """
+        Applies the Mahalanobis distance method to identify and remove outliers from the input data.
+
+        Args:
+            mahal_X (numpy.ndarray): The input feature matrix.
+            y (numpy.ndarray): The corresponding labels or targets.
+            threshold (float): The percentile threshold to identify outliers. Default is 95.
+
+        Returns:
+            numpy.ndarray: The feature matrix with outliers removed.
+            numpy.ndarray: The corresponding labels or targets with outliers removed.
+        """
+        mahal_X = np.asarray(mahal_X)
+        x_mu = mahal_X - np.mean(mahal_X, axis=0)
+        cov = np.cov(mahal_X.T)
+        inv_covmat = np.linalg.inv(cov)
+        left_term = np.dot(x_mu, inv_covmat)
+        mahal = np.dot(left_term, x_mu.T)
+        d = mahal.diagonal()
+        threshold = np.percentile(d, threshold)
+        mahal_x = mahal_X[d < threshold]
+
+        return mahal_x, y[d < threshold]
+
+    @staticmethod
+    def remove_outliers_pls(x_, y_, max_outliers=10):
+        """
+        Removes outliers from the input data using Partial Least Squares (PLS) regression.
+
+        Args:
+            x_ (numpy.ndarray): The input feature matrix.
+            y_ (numpy.ndarray): The corresponding labels or targets.
+            max_outliers (int): The maximum number of outliers to remove. Default is 10.
+
+        Returns:
+            numpy.ndarray: The feature matrix with outliers removed.
+            numpy.ndarray: The corresponding labels or targets with outliers removed.
+        """
+
+        def optimize_pls_components(x, y, cv):
+            """
+            Optimizes the number of PLS components using cross-validation.
+
+            Args:
+                x (numpy.ndarray): The input feature matrix.
+                y (numpy.ndarray): The corresponding labels or targets.
+                cv (KFold): The cross-validation strategy.
+
+            Returns:
+                tuple: A tuple containing arrays of MAE, MSE, RMSE, R2, and correlation coefficients for each number of components.
+            """
+
+            mae, mse, rmse, r2, r = [], [], [], [], []
+
+            for n_components in range(1, 17):
+                model = PLSRegression(n_components=n_components)
+                y_pred = cross_val_predict(model, x, y, cv=cv)
+
+                mae.append(mean_absolute_error(y, y_pred))
+                mse.append(mean_squared_error(y, y_pred, squared=True))
+                rmse.append(mean_squared_error(y, y_pred, squared=False))
+                r2.append(r2_score(y, y_pred))
+                r.append(np.corrcoef(y, y_pred)[0, 1])
+
+            return (
+                np.array(mae),
+                np.array(mse),
+                np.array(rmse),
+                np.array(r2),
+                np.array(r),
+            )
+
+        cv = KFold(3, shuffle=True, random_state=42)
+        mae, mse, rmse, r2, r = optimize_pls_components(x_, y_, cv)
+        ncomp = np.argmin(rmse) + 1
+        pls = PLSRegression(n_components=ncomp)
+        pls.fit(x_, y_)
+        T = pls.x_scores_
+        P = pls.x_loadings_
+        Err = x_ - np.dot(T, P.T)
+        Q = np.sum(Err**2, axis=1)
+        Tsq = np.sum((pls.x_scores_ / np.std(pls.x_scores_, axis=0)) ** 2, axis=1)
+
+        # set the confidence level
+        conf = 0.95
+        # Calculate confidence level for T-squared from the ppf of the F distribution
+        Tsq_conf = (
+            f.ppf(q=conf, dfn=ncomp, dfd=(x_.shape[0] - ncomp))
+            * ncomp
+            * (x_.shape[0] - 1)
+            / (x_.shape[0] - ncomp)
+        )
+
+        # Estimate the confidence level for the Q-residuals
+        i = np.max(Q) + 1
+        while 1 - np.sum(Q > i) / np.sum(Q > 0) > conf:
+            i -= 1
+        Q_conf = i
+
+        # Sort the RMS distance from the origin in descending order (largest first)
+        rms_dist = np.flip(np.argsort(np.sqrt(Q**2 + Tsq**2)), axis=0)
+        Xc = x_[rms_dist, :]
+        Yc = y_[rms_dist]
+
+        mse = np.zeros(max_outliers)
+        for j in range(max_outliers):
+            pls = PLSRegression(n_components=ncomp)
+            pls.fit(Xc[j:, :], Yc[j:])
+            y_cv = cross_val_predict(pls, Xc[j:, :], Yc[j:], cv=3)
+            mse[j] = mean_squared_error(Yc[j:], y_cv)
+
+        msemin = np.where(mse == np.min(mse[np.nonzero(mse)]))[0][0]
+        print("Remove %d outliers" % (msemin + 1))
+
+        outlier_i = rms_dist[0 : msemin + 1]
+
+        spectrum_select, y_select = np.delete(x_, outlier_i, axis=0), np.delete(
+            y_, outlier_i, axis=0
+        )
+        return spectrum_select, y_select

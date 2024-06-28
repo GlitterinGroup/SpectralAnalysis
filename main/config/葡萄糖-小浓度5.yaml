@@ -1,0 +1,33 @@
+data:
+  # file_name: 葡萄糖0620-小浓度5.xlsx
+  file_name: 葡萄糖0621-小浓度5.xlsx
+  # file_name: 葡萄糖0621-小浓度5_python.xlsx
+  data_sheet:
+    - 重建样品
+    - 重建光源
+    # - 重建样品扣光源
+  data_transpose: True
+  target_sheet: 浓度
+  target_column: 0
+  task_type: regression
+
+
+plot_data: True
+plot_results: True
+
+
+preprocess:
+  - method: mahalanobis
+  - method: sg
+    params:
+      window_len: 25
+  - method: poly_detrend
+  - method: mean_centering
+
+
+data_split: spxy
+split_params:
+  test_size: 0.3333333333333333
+
+
+model: bayes

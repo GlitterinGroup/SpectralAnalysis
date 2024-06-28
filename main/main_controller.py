@@ -21,14 +21,17 @@ class MainController:
     Main controller class responsible for orchestrating the entire data processing pipeline.
     """
 
-    def __init__(self, config_file):
+    def __init__(self, config_name):
         """
         Initializes the MainController with the given configuration file.
 
         Args:
             config_file (str): Path to the YAML configuration file.
         """
-        self.config = self._load_config(config_file)
+        config_path = os.path.join(
+            os.path.dirname(__file__), "config", f"{config_name}.yaml"
+        )
+        self.config = self._load_config(config_path)
         self.plot_data = self.config.get("plot_data", False)
         self.plot_results = self.config.get("plot_results", False)
 
@@ -37,7 +40,8 @@ class MainController:
         self.task_type = self.config["data"]["task_type"].lower()
         self.save_dir = Path(
             os.path.join(
-                os.path.dirname(__file__), f"./result/{self.task_name}/{timestamp}"
+                os.path.dirname(__file__),
+                f"./result/{config_name}/{self.task_name}/{timestamp}",
             )
         )
         self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -69,6 +73,7 @@ class MainController:
             data_start_row=self.config["data"].get("data_start_row", 0),
             target_sheet=self.config["data"]["target_sheet"],
             target_column=self.config["data"]["target_column"],
+            target_start_row=self.config["data"].get("target_start_row", 0),
         )
 
         self.wave_num = X.shape[1]
@@ -112,7 +117,7 @@ class MainController:
 
         stage = stage.lower()
         wavelengths = _get_wavelengths(self.wave_num)
-        plot_title = f"{self.task_name} 光谱/光源光谱 {stage}"
+        plot_title = f"{self.task_name} {stage}"
 
         if stage.startswith("split") or stage.startswith("data"):
             # 数据划分后，以"data"开头的是数据经过多种处理方法后再split，直接split是前面处理方法为一种
@@ -142,14 +147,17 @@ class MainController:
                 plot_title,
             )
 
-        if stage in ["raw", "preprocessed"] and X.shape[1] == self.wave_num:
-            Draw.plot_wavelength_line(
-                wavelengths,
-                X,
-                self.save_dir,
-                stage,
-                plot_title,
-            )
+        if (stage == "raw" or stage.startswith("preprocessed")) and X.shape[
+            1
+        ] == self.wave_num:
+            # 暂时不画line
+            # Draw.plot_wavelength_line(
+            #     wavelengths,
+            #     X,
+            #     self.save_dir,
+            #     stage,
+            #     plot_title,
+            # )
             Draw.plot_wavelength_scatter(
                 wavelengths,
                 X,
@@ -158,37 +166,90 @@ class MainController:
                 plot_title,
             )
 
-    def preprocess(self, data):
+    def preprocess(self, X, y):
         """
-        Preprocesses the input data according to the specified method in the configuration.
+        Preprocesses the input data according to the specified methods in the configuration.
 
         Args:
-            data (numpy.ndarray): The input data.
+            X (numpy.ndarray): The input data.
+            y (numpy.ndarray): The corresponding labels or targets.
 
         Returns:
-            numpy.ndarray: The preprocessed data.
+            list: A list of preprocessed feature matrices.
+            list: A list of preprocessed target arrays.
         """
-        if "preprocess" in self.config:
-            method_name = self.config["preprocess"].lower()
+
+        def process_single_method(processed_X, processed_y, method_config):
+            method_name = method_config["method"].lower()
             method = getattr(Preprocess, method_name)
-            params = self.config.get("preprocess_params", {})
+            params = method_config.get("params", {})
+            param_combinations = self._get_param_combinations(params)
 
-            processed_data = method(data, **params)
+            p_x_list = []
+            p_y_list = []
+            for i, param in enumerate(param_combinations):
+                if isinstance(processed_X, list):
+                    processed_X_list, processed_y_list = [], []
+                    for j, (p_x, p_y) in enumerate(zip(processed_X, processed_y)):
+                        if (
+                            method_name == "mahalanobis"
+                            or method_name == "remove_outliers_pls"
+                        ):
+                            pr_x, pr_y = method(p_x, p_y, **param)
+                            
+                           
+                        else:
+                            pr_x = method(p_x, **param)
+                            pr_y = p_y
+                        processed_X_list.append(pr_x)
+                        processed_y_list.append(pr_y)
+                        if self.plot_data:
+                            self.draw_data(
+                                pr_x, f"Preprocessed ({method_name}_{i+1}_{j+1})"
+                            )
+                    p_x_list.extend(processed_X_list)
+                    p_y_list.extend(processed_y_list)
+                else:
+                    if (
+                        method_name == "mahalanobis"
+                        or method_name == "remove_outliers_pls"
+                    ):
+                        processed_X, processed_y = method(
+                            processed_X, processed_y, **param
+                        )
+                    else:
+                        processed_X = method(processed_X, **param)
+                    p_x_list.append(processed_X)
+                    p_y_list.append(processed_y)
+                    if self.plot_data:
+                        self.draw_data(
+                            processed_X, f"Preprocessed ({method_name}_{i+1})"
+                        )
+            return p_x_list, p_y_list
 
-            if self.plot_data:
-                self.draw_data(processed_data, "Preprocessed")
+        if "preprocess" in self.config:
+            processed_X = X.copy()
+            processed_y = y.copy()
 
-            return processed_data
+            preprocess_methods = self.config["preprocess"]
 
-        return data
+            for method_config in preprocess_methods:
+                p_x, p_y = process_single_method(
+                    processed_X, processed_y, method_config
+                )
+                processed_X = p_x
+                processed_y = p_y
+            return processed_X, processed_y
 
-    def feature_selection(self, data, target=None):
+        return [X], [y]
+
+    def feature_selection(self, X, y):
         """
         Performs feature selection on the input data according to the specified method in the configuration.
 
         Args:
-            data (numpy.ndarray): The input data.
-            target (numpy.ndarray, optional): The target data. Defaults to None.
+            X (list): The input data.
+            y (list): The target data.
 
         Returns:
             numpy.ndarray: The selected features.
@@ -210,27 +271,22 @@ class MainController:
             )
 
             selected_data = []
+            selected_target = []
             for idx, params in enumerate(feature_selection_param_combinations):
-                if method_name in ["pca", "spa"]:
-                    single_selected_data = method(data, **params)
-                else:
-                    single_selected_data = method(data, target, **params)
-                selected_data.append(single_selected_data)
-
-            if len(selected_data) == 1:
-                selected_data = selected_data[0]
+                for data, target in zip(X, y):
+                    if method_name in ["pca", "spa"]:
+                        single_selected_data = method(data, **params)
+                    else:
+                        single_selected_data = method(data, target, **params)
+                    selected_data.append(single_selected_data)
+                    selected_target.append(target)
 
             if self.plot_data:
-                if isinstance(selected_data, list):
-                    for idx, single_selected_data in enumerate(selected_data):
-                        self.draw_data(
-                            single_selected_data, f"feature_selection_{idx+1}"
-                        )
-                else:
-                    self.draw_data(selected_data, "feature_selection")
+                for idx, single_selected_data in enumerate(selected_data):
+                    self.draw_data(single_selected_data, f"feature_selection_{idx+1}")
 
-            return selected_data
-        return data
+            return selected_data, selected_target
+        return X, y
 
     def _get_param_combinations(self, config):
         """
@@ -242,15 +298,22 @@ class MainController:
         Returns:
             list: List of dictionaries representing parameter combinations.
         """
-        if any(isinstance(value, list) for value in config.values()):
+        # 找到所有列表类型的参数
+        list_params = {k: v for k, v in config.items() if isinstance(v, list)}
+        non_list_params = {k: v for k, v in config.items() if not isinstance(v, list)}
+
+        if list_params:
             # 找到所有参数的组合
-            keys, values = zip(
-                *[(k, v) for k, v in config.items() if isinstance(v, list)]
-            )
-            return [
+            keys, values = zip(*list_params.items())
+            combinations = [
                 dict(zip(keys, combination))
                 for combination in itertools.product(*values)
             ]
+
+            # 将非列表类型的参数添加到每个组合中
+            for combination in combinations:
+                combination.update(non_list_params)
+            return combinations
         else:
             return [config]
 
@@ -285,7 +348,7 @@ class MainController:
                 raise ValueError(f"Unsupported data_split type: {method_name}")
 
             # 调用对应的划分方法并传递参数
-            if method_name == "kfold":
+            if method_name == "kfold_split":
                 return split_method(X, y, **split_params)
             else:
                 return [split_method(X, y, **split_params)]
@@ -338,24 +401,13 @@ class MainController:
         )
 
         for idx, params in enumerate(data_split_param_combinations):
-            if isinstance(X, list):
-                for i, single_X in enumerate(X):
-                    splits = _split_single_data(single_X, y, split_method_name, params)
-                    _process_splits(splits, idx, i)
-            else:
-                splits = _split_single_data(X, y, split_method_name, params)
-                _process_splits(splits, idx)
+            for i, (single_X, single_y) in enumerate(zip(X, y)):
+                splits = _split_single_data(
+                    single_X, single_y, split_method_name, params
+                )
+                _process_splits(splits, idx, i)
 
-        # 如果只有一个参数组合，返回单个拆分结果而不是列表
-        if len(X_train_list_all) == 1:
-            return (
-                X_train_list_all[0],
-                X_test_list_all[0],
-                y_train_list_all[0],
-                y_test_list_all[0],
-            )
-        else:
-            return X_train_list_all, X_test_list_all, y_train_list_all, y_test_list_all
+        return X_train_list_all, X_test_list_all, y_train_list_all, y_test_list_all
 
     def model_training(self, X_train, y_train):
         """
@@ -484,6 +536,9 @@ class MainController:
             str: Path to the saved result file.
         """
         results_path = os.path.join(self.save_dir, "result.csv")
+
+        if not all(isinstance(y_t, np.ndarray) for y_t in y_true):
+            y_true = [y_true]
 
         all_results = []
         for idx, (single_y_pred, single_y_true) in enumerate(
@@ -627,7 +682,7 @@ class MainController:
                         self.save_dir,
                         f"train_test_scatter_{idx+1}",
                         f"{self.task_name}_{idx+1}",
-                        0.1
+                        0.1,
                     )
             else:
                 Draw.plot_true_pred_line(
@@ -655,5 +710,5 @@ class MainController:
                         self.save_dir,
                         f"train_test_scatter_{idx+1}",
                         f"{self.task_name}_{idx+1}",
-                        0.1
+                        0.1,
                     )

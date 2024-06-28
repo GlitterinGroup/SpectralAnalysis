@@ -21,24 +21,19 @@ def main_flow(config_name):
     Returns:
         None
     """
-    # 加载配置文件
-    config_path = os.path.join(
-        os.path.dirname(__file__), "config", f"{config_name}.yaml"
-    )
-
     # 创建主控制器实例并传入配置文件
-    controller = MainController(config_path)
+    controller = MainController(config_name)
 
     X, y = controller.load_data()
 
     # 数据预处理
-    processed_data = controller.preprocess(X)
+    processed_data, processed_y = controller.preprocess(X, y)
 
     # 特征选择
-    features = controller.feature_selection(processed_data, y)
-
+    features, processed_y = controller.feature_selection(processed_data, processed_y)
+    
     # 数据划分
-    X_train, X_test, y_train, y_test = controller.data_split(features, y)
+    X_train, X_test, y_train, y_test = controller.data_split(features, processed_y)
 
     # 模型训练
     trained_model = controller.model_training(X_train, y_train)
@@ -63,5 +58,6 @@ def main_flow(config_name):
 
 
 if __name__ == "__main__":
-    config_name = "样机_芯片2_温昱婷_20240618"  # 修改此处为你的配置文件名
+    config_name = "样机_芯片2"  # 修改此处为你的配置文件名
+    # config_name = "葡萄糖-小浓度5"  
     main_flow(config_name)

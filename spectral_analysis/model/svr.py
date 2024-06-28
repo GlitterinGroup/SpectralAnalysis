@@ -18,7 +18,7 @@ class SVRRegression(SVR):
         predict(X): Predict using the trained SVR model.
     """
 
-    def __init__(self, kernel="rbf", C=1.0, gamma='scale', **kwargs):
+    def __init__(self, kernel="rbf", C=1000, gamma='scale', **kwargs):
         """
         Initialize the SVRRegression model.
 

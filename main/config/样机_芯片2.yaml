@@ -1,0 +1,35 @@
+data:
+  file_name: 
+    # 样机_芯片2_温昱婷_20240618.xlsx
+    样机_芯片2_刘波波_20240618.xlsx
+  data_sheet:
+    - 重建光谱
+    - 光源光谱
+    # - 除光源
+  data_transpose: True
+  data_start_row: 2 
+  target_sheet: 理化值
+  target_column: 3
+  target_start_row: 1 
+  task_type: regression
+
+
+plot_data: True
+plot_results: True
+
+
+preprocess:
+  - method: mahalanobis
+  - method: sg
+    params:
+      # window_len: 25
+      window_len: 35
+  - method: poly_detrend
+  - method: mean_centering
+  
+
+data_split: spxy
+split_params:
+  test_size: 0.3333333333333333
+
+model: lssvm
