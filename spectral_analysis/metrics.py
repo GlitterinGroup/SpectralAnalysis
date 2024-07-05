@@ -64,47 +64,49 @@ class Metrics:
         return np.sqrt(mean_squared_error(y_true, y_pred))
 
     @staticmethod
-    def calculate_correlation(y_true, y_pred):
+    def calculate_r(y_true, y_pred):
         """
-        Calculate the Pearson correlation coefficient between the true and predicted values.
+        Calculate the Pearson correlation coefficient (r) between the true and predicted values.
 
         Args:
             y_true (array-like): True values of the target variable.
             y_pred (array-like): Predicted values of the target variable.
 
         Returns:
-            float: Pearson correlation coefficient.
+            float: Pearson correlation coefficient (r).
         """
         return np.corrcoef(y_true, y_pred)[0, 1]
 
     @staticmethod
     def calculate_rc(y_true_train, y_pred_train):
         """
-        Calculates the Regression Coefficient (RC) on the training set.
+        Calculate the calibration correlation coefficient (Rc) on the training set.
 
         Args:
             y_true_train: Array of true values for the training set.
             y_pred_train: Array of predicted values for the training set.
 
         Returns:
-            float: RC value calculated using the provided true and predicted values.
+            float: Rc value calculated using the provided true and predicted values.
         """
-        return Metrics.calculate_r2(y_true_train, y_pred_train)
+        return Metrics.calculate_r(y_true_train, y_pred_train)
 
     @staticmethod
     def calculate_rp(y_true, y_pred):
         """
-        Calculates the Regression Weight (RP) on the test set.
+        Calculate the prediction correlation coefficient (Rp) on the test set.
 
         Args:
             y_true: Array of true values for the test set.
             y_pred: Array of predicted values for the test set.
 
         Returns:
-            float: RP value calculated using the provided true and predicted values.
+            float: Rp value calculated using the provided true and predicted values.
         """
-        return Metrics.calculate_r2(y_true, y_pred)
+        return Metrics.calculate_r(y_true, y_pred)
 
+
+    @staticmethod
     def calculate_rmsec(y_true_train, y_pred_train):
         """
         Calculates the Root Mean Squared Error of Calibration (RMSEC).
@@ -118,6 +120,7 @@ class Metrics:
         """
         return Metrics.calculate_rmse(y_true_train, y_pred_train)
 
+    @staticmethod
     def calculate_rmsep(y_true, y_pred):
         """
         Calculates the Root Mean Squared Error of Prediction (RMSEP).
@@ -131,14 +134,14 @@ class Metrics:
         """
         return Metrics.calculate_rmse(y_true, y_pred)
 
-    def calculate_rpd(y_true, y_pred, rmse_func):
+    @staticmethod
+    def calculate_rpd(y_true, y_pred):
         """
         Calculates the Relative Predictive Deviation (RPD).
 
         Args:
             y_true: Array of true values.
             y_pred: Array of predicted values.
-            rmse_func: Function to calculate RMSEP.
 
         Returns:
             float: RPD value calculated as the ratio of the standard deviation of y_true to RMSEP.
@@ -147,7 +150,7 @@ class Metrics:
             ValueError: If RMSEP is zero, making RPD undefined.
         """
         sd = np.std(y_true)
-        rmsep = rmse_func(y_true, y_pred)  # 使用提供的RMSEP计算函数
+        rmsep = Metrics.calculate_rmsep(y_true, y_pred)
         if rmsep == 0:
             raise ValueError("RMSEP cannot be zero, which would make RPD undefined.")
         return sd / rmsep
@@ -174,6 +177,7 @@ class Metrics:
             - 'Rp': Regression Weight (RP) calculated using true and predicted values from test set.
             - 'RMSEC': Root Mean Squared Error of Calibration (RMSEC) on the training set.
             - 'RMSEP': Root Mean Squared Error of Prediction (RMSEP) on the test set.
+            - 'RPD': Relative Predictive Deviation (RPD) on the test set.
         """
 
         return {
@@ -181,9 +185,10 @@ class Metrics:
             "mse": Metrics.calculate_mse(y_true_test, y_pred_test),
             "rmse": Metrics.calculate_rmse(y_true_test, y_pred_test),
             "r2": Metrics.calculate_r2(y_true_test, y_pred_test),
-            "r": Metrics.calculate_correlation(y_true_test, y_pred_test),
+            "r": Metrics.calculate_r(y_true_test, y_pred_test),
             "Rc": Metrics.calculate_rc(y_true_train, y_pred_train),
             "Rp": Metrics.calculate_rp(y_true_test, y_pred_test),
             "RMSEC": Metrics.calculate_rmsec(y_true_train, y_pred_train),
             "RMSEP": Metrics.calculate_rmsep(y_true_test, y_pred_test),
+            "RPD": Metrics.calculate_rpd(y_true_test, y_pred_test),
         }

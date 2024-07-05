@@ -20,33 +20,42 @@ class FeatureSelection:
     """
 
     @staticmethod
-    def pca(data, n_components=None):
+    def pca(data, n_features=100):
         """
         Perform Principal Component Analysis (PCA) on the data.
 
         Args:
             data (numpy.ndarray): Input data array, with shape (n_samples, n_features).
-            n_components (int, optional): Number of principal components to keep.
-                                        If None, all components are kept.
+            n_features (int, optional): Number of principal features to select.
+                                        Default is 100.
 
         Returns:
-            numpy.ndarray: Transformed data with reduced dimensions.
+            tuple:
+                - numpy.ndarray: Selected features matrix, shape (n_samples, selected_n_features).
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
-        pca_model = PCA(n_components=n_components)
-        return pca_model.fit_transform(data)
+        pca_model = PCA(n_components=n_features)
+        pca_model.fit(data)
+
+        loadings = pca_model.components_
+        importance = np.sum(np.abs(loadings), axis=0)
+        i_select = np.argsort(importance)[-n_features:]
+        return data[:, i_select], i_select
 
     @staticmethod
-    def spa(data, n_features=50, method=0):
+    def spa(data, n_features=100, method=0):
         """
         Perform feature selection using the Successive Projections Algorithm (SPA).
 
         Args:
             data (numpy.ndarray): Input data array, with shape (n_samples, n_features).
-            n_features (int, optional): Number of features to select. Default is 50.
+            n_features (int, optional): Number of features to select. Default is 100.
             method (int, optional): Method for SPA (0 or 1). Method 1 is slower due to matrix inversion. Default is 0.
 
         Returns:
-            numpy.ndarray: Data array with selected features.
+            tuple:
+                - numpy.ndarray: Selected features matrix, shape (n_samples, selected_n_features).
+                - numpy.ndarray: Indices of selected features in the original feature set.
 
         References:
             https://www.sciencedirect.com/science/article/pii/S0169743901001198
@@ -95,7 +104,7 @@ class FeatureSelection:
             i_remain.remove(i_max)
 
         i_select.sort()
-        return data[:, i_select]
+        return data[:, i_select], i_select
 
     @staticmethod
     def select_from_model(data, target):
@@ -107,35 +116,38 @@ class FeatureSelection:
             target (numpy.ndarray): Target data array, with shape (n_samples, ).
 
         Returns:
-            numpy.ndarray: Data array with selected features.
+            tuple:
+                - numpy.ndarray: Data array with selected features.
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
         selector = SelectFromModel(estimator=RandomForestRegressor()).fit(data, target)
-        return selector.transform(data)
+        i_select = selector.get_support(indices=True)
+        return data[:, i_select], i_select
 
     @staticmethod
-    def mrmr(data, target, n_features=50, task_="regression"):
+    def mrmr(data, target, n_features=100, task_="regression"):
         """
         Perform Minimum Redundancy Maximum Relevance (mRMR) feature selection.
 
         Args:
             data (numpy.ndarray): Input data array, with shape (n_samples, n_features).
             target (numpy.ndarray): Target data array, with shape (n_samples, ).
-            n_features (int, optional): Number of features to select. Default is 50.
+            n_features (int, optional): Number of features to select. Default is 100.
             task_ (str, optional): Task type ('regression' or 'classification'). Default is 'regression'.
 
         Returns:
-            numpy.ndarray: Data array with selected features.
+            tuple:
+                - numpy.ndarray: Selected features matrix, shape (n_samples, selected_n_features).
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
         if task_ == "regression":
             mi = mutual_info_regression(data, target)
         else:
             mi = mutual_info_classif(data, target)
 
-        # Select the top n_features based on mutual information
-        selected_indices = np.argsort(mi)[-n_features:]
+        i_select = np.argsort(mi)[-n_features:]
 
-        # Return the data with selected features
-        return data[:, selected_indices]
+        return data[:, i_select], i_select
 
     @staticmethod
     def uve(data, target, n_components=50, cv=10):
@@ -149,14 +161,41 @@ class FeatureSelection:
             cv (int, optional): Number of cross-validation folds. Default is 10.
 
         Returns:
-            numpy.ndarray: Indices of variables considered informative.
-
-        References:
-            https://github.com/qinshiqisky/CARS-UVE-SPA-BY_python
+            tuple:
+                - numpy.ndarray: Data array with selected features (half of the original features).
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
+
+        def optimize_pls_components(X, Y, max_components, cv):
+            """
+            Optimize the number of PLS components using cross-validation.
+
+            Args:
+                X (numpy.ndarray): Input data array.
+                Y (numpy.ndarray): Target data array.
+                max_components (int): Maximum number of components to test.
+                cv (int): Number of cross-validation folds.
+
+            Returns:
+                int: Optimal number of PLS components.
+            """
+            best_r2 = -np.inf
+            best_n_components = 0
+
+            for n in range(2, min(max_components, X.shape[1]) + 1):
+                pls = PLSRegression(n_components=n)
+                r2 = cross_val_score(pls, X, Y, cv=cv, scoring="r2").mean()
+                if r2 > best_r2:
+                    best_r2 = r2
+                    best_n_components = n
+
+            return best_n_components
+
         N, D = data.shape
-        pls = PLSRegression(n_components=n_components)
-        pls.train(data, target)
+        optimal_components = optimize_pls_components(data, target, n_components, cv)
+
+        pls = PLSRegression(n_components=optimal_components)
+        pls.fit(data, target)
         original_coefs = np.abs(pls.coef_).reshape(-1)
 
         # Calculate stability for each variable through cross-validation
@@ -164,36 +203,37 @@ class FeatureSelection:
         for i in tqdm(range(D), desc="uve: "):
             # Exclude the current variable from the dataset
             data_reduced = np.delete(data, i, axis=1)
-            # Refit the PLS model
-            pls_cv = PLSRegression(n_components=n_components)
+            pls_cv = PLSRegression(n_components=optimal_components)
             cv_scores = cross_val_score(
                 pls_cv, data_reduced, target, cv=cv, scoring="neg_mean_squared_error"
             )
             stability_scores[i] = np.mean(np.abs(cv_scores))
 
-        # The informativeness of a variable is determined by the product of its stability score and original coefficient
+        # Calculate the informativeness score for each variable
         informative_scores = stability_scores * original_coefs
-        # Set a threshold to select informative variables
         threshold = np.median(informative_scores)
-        informative_vars = np.where(informative_scores >= threshold)[0]
-
-        informative_vars.sort()
-        return data[:, informative_vars]
+        i_select = np.where(informative_scores >= threshold)[0]
+        return data[:, i_select], i_select
 
     @staticmethod
-    def cars(data, target, n_sample_runs=50, pls_components=20, n_cv_folds=5):
+    def cars(
+        data, target, n_features=100, n_sample_runs=50, pls_components=20, n_cv_folds=5
+    ):
         """
         Perform Competitive Adaptive Reweighted Sampling (CARS).
 
         Args:
             data (numpy.ndarray): Input spectral data array, with shape (n_samples, n_features).
             target (numpy.ndarray): Target data array, with shape (n_samples, ).
+            n_features (int, optional): Number of features to select. Default is 100.
             n_sample_runs (int, optional): Number of sampling runs. Default is 50.
             pls_components (int, optional): Number of PLS components. Default is 20.
             n_cv_folds (int, optional): Number of cross-validation folds. Default is 5.
 
         Returns:
-            numpy.ndarray: Data array with selected variables.
+            tuple:
+                - numpy.ndarray: Selected features matrix, shape (n_samples, selected_n_features).
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
 
         def _pc_cross_validation(data, target, pc, cv):
@@ -290,9 +330,8 @@ class FeatureSelection:
 
         min_idx = np.argmin(RMSECV)
         optimal = wavelengths_set[min_idx, :]
-        i_select = np.where(optimal != 0)[0]
-
-        return data[:, i_select]
+        i_select = np.argsort(-optimal)[:n_features]
+        return data[:, i_select], i_select
 
     @staticmethod
     def corr_coefficient(data, target, threshold=0.5):
@@ -305,11 +344,13 @@ class FeatureSelection:
             threshold (float, optional): Threshold for selecting features based on absolute correlation coefficient. Default is 0.5.
 
         Returns:
-            numpy.ndarray: Data array with selected features.
+            tuple:
+                - numpy.ndarray: Data array with selected features.
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
         coef = r_regression(data, target)
         i_select = np.where(np.abs(coef) > threshold)[0]
-        return data[:, i_select]
+        return data[:, i_select], i_select
 
     @staticmethod
     def anova(data, target, task_="regression", threshold=0.5):
@@ -323,7 +364,9 @@ class FeatureSelection:
             threshold (float, optional): Threshold for selecting features based on normalized ANOVA F-test scores. Default is 0.5.
 
         Returns:
-            numpy.ndarray: Data array with selected features.
+            tuple:
+                - numpy.ndarray: Data array with selected features.
+                - numpy.ndarray: Indices of selected features in the original feature set.
         """
         if task_ == "regression":
             fs = SelectKBest(score_func=f_regression, k=data.shape[1])
@@ -335,4 +378,4 @@ class FeatureSelection:
         i_select = np.where(Preprocess.normalization(np.abs(fit.scores_)) > threshold)[
             0
         ]
-        return data[:, i_select]
+        return data[:, i_select], i_select

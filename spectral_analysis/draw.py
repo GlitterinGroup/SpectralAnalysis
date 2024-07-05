@@ -12,12 +12,15 @@ class Draw:
     """
 
     @staticmethod
-    def plot_wavelength_line(wavelengths, data, save_path, save_name, title=None):
+    def plot_wavelength_line(
+        wavelengths, selected_idx, data, save_path, save_name, title=None
+    ):
         """
         Plot line graphs for spectral data.
 
         Args:
             wavelengths (array-like): Array of wavelength values.
+            selected_idx (array-like): Indices of selected wavelengths to highlight.
             data (array-like): Spectral data array, shape (n_samples, n_wavelengths).
             save_path (str): Directory path to save the plot.
             save_name (str): Filename to save the plot.
@@ -29,6 +32,15 @@ class Draw:
         plt.figure(figsize=(10, 5))
         for d in data:
             plt.plot(wavelengths, d, linewidth=1)
+
+        if selected_idx is not None:
+            for idx in selected_idx:
+                plt.axvline(
+                    x=wavelengths[idx],
+                    color="tab:green",
+                    linestyle="-",
+                    alpha=0.3,
+                )
         plt.xlabel("Wavelength(nm)")
         # plt.ylabel("Reflectance")
         plt.title(title)
@@ -38,12 +50,15 @@ class Draw:
         plt.close()
 
     @staticmethod
-    def plot_wavelength_scatter(wavelengths, data, save_path, save_name, title=None):
+    def plot_wavelength_scatter(
+        wavelengths, selected_idx, data, save_path, save_name, title=None
+    ):
         """
         Plot scatter graphs for spectral data.
 
         Args:
             wavelengths (array-like): Array of wavelength values.
+            selected_idx (array-like): Indices of selected wavelengths to highlight.
             data (array-like): Spectral data array, shape (n_samples, n_wavelengths).
             save_path (str): Directory path to save the plot.
             save_name (str): Filename to save the plot.
@@ -55,6 +70,15 @@ class Draw:
         plt.figure(figsize=(10, 5))
         for d in data:
             plt.scatter(wavelengths, d, s=1)
+
+        if selected_idx is not None:
+            for idx in selected_idx:
+                plt.axvline(
+                    x=wavelengths[idx],
+                    color="tab:green",
+                    linestyle="-",
+                    alpha=0.3,
+                )
         plt.xlabel("Wavelength(nm)")
         # plt.ylabel("Reflectance")
         plt.title(title)
@@ -65,7 +89,12 @@ class Draw:
 
     @staticmethod
     def plot_train_test_scatter(
-        wavelengths, train_data, test_data, save_path, save_name, title=None
+        wavelengths,
+        train_data,
+        test_data,
+        save_path,
+        save_name,
+        title=None,
     ):
         """
         Plot scatter graphs for train and test spectral data.

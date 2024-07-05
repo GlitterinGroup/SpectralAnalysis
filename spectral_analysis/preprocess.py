@@ -2,8 +2,10 @@ import copy
 
 import numpy as np
 import pandas as pd
+import pywt
 from obspy.signal.detrend import polynomial
 from pybaselines.whittaker import airpls, derpsalsa, iarpls
+from scipy.ndimage import gaussian_filter1d
 from scipy.signal import savgol_filter
 from scipy.stats import f
 from sklearn.cross_decomposition import PLSRegression
@@ -310,6 +312,46 @@ class Preprocess:
 
         return data_ma
 
+    def gaussian_smoothing(data, sigma=1.0):
+        """
+        Smooth a signal using Gaussian filter.
+
+        Args:
+            signal (numpy.ndarray): The input signal to be smoothed.
+            sigma (float, optional): The standard deviation of the Gaussian kernel. Default is 1.0.
+
+        Returns:
+            numpy.ndarray: The smoothed signal.
+        """
+        smoothed_signal = gaussian_filter1d(data, sigma)
+        return smoothed_signal
+
+    @staticmethod
+    def wavelet_denoising(data, wavelet='db1', level=None):
+        """
+        Denoise a signal using wavelet transform.
+
+        Args:
+            data (numpy.ndarray): The input signal to be denoised.
+            wavelet (str, optional): The type of wavelet to use. Default is 'db1'.
+            level (int, optional): The level of decomposition to perform. If None, the level is calculated based on the length of the data.
+
+        Returns:
+            numpy.ndarray: The denoised signal.
+        """
+        # Perform wavelet decomposition
+        coeff = pywt.wavedec(data, wavelet, mode='per', level=level)
+
+        # Calculate the universal threshold
+        sigma = np.median(np.abs(coeff[-1])) / 0.6745
+        uthresh = sigma * np.sqrt(2 * np.log(len(data)))
+
+        # Apply soft thresholding to detail coefficients
+        coeff[1:] = [pywt.threshold(i, value=uthresh, mode='soft') for i in coeff[1:]]
+
+        # Reconstruct the signal using the thresholded coefficients
+        return pywt.waverec(coeff, wavelet, mode='per')
+    
     # Baseline correction =====================================================
 
     @staticmethod

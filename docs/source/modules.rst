@@ -44,6 +44,11 @@ spectral_analysis.model
    :undoc-members:
    :show-inheritance:
 
+.. automodule:: spectral_analysis.model.lssvm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. automodule:: spectral_analysis.model.pls
    :members:
    :undoc-members:

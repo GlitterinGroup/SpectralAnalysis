@@ -83,13 +83,15 @@ class MainController:
 
         return X, y
 
-    def draw_data(self, X, stage):
+    def draw_data(self, X, stage, selected_idx=None, selected_X=None):
         """
         Draw data visualizations.
 
         Args:
-            X (numpy.ndarray): Input data.
+            X (numpy.ndarray or tuple): Input data. If `stage` indicates a split stage, this should be a tuple of (train_data, test_data).
             stage (str): Stage of data processing.
+            selected_idx (list, optional): List of selected feature indices. Defaults to None.
+            selected_X (numpy.ndarray, optional): Data after feature selection. Defaults to None.
         """
 
         def _read_wavelengths(file_path):
@@ -123,9 +125,13 @@ class MainController:
             # 数据划分后，以"data"开头的是数据经过多种处理方法后再split，直接split是前面处理方法为一种
             train_data, test_data = X
             if "feature_selection" not in self.config:
-                # 特征选择后不画wavelengths图
                 Draw.plot_train_test_scatter(
-                    wavelengths, train_data, test_data, self.save_dir, stage, plot_title
+                    wavelengths,
+                    train_data,
+                    test_data,
+                    self.save_dir,
+                    stage,
+                    plot_title,
                 )
             Draw.plot_heatmap(
                 train_data,
@@ -140,19 +146,25 @@ class MainController:
                 plot_title + "_test",
             )
         else:
-            Draw.plot_heatmap(
-                X,
-                self.save_dir,
-                stage,
-                plot_title,
-            )
-
-        if (stage == "raw" or stage.startswith("preprocessed")) and X.shape[
-            1
-        ] == self.wave_num:
+            if selected_X is not None:
+                # 进行了特征选择，即stage为feature_selection
+                Draw.plot_heatmap(
+                    selected_X,
+                    self.save_dir,
+                    stage,
+                    plot_title,
+                )
+            else:
+                Draw.plot_heatmap(
+                    X,
+                    self.save_dir,
+                    stage,
+                    plot_title,
+                )
             # 暂时不画line
             # Draw.plot_wavelength_line(
             #     wavelengths,
+            #     selected_idx,
             #     X,
             #     self.save_dir,
             #     stage,
@@ -160,6 +172,7 @@ class MainController:
             # )
             Draw.plot_wavelength_scatter(
                 wavelengths,
+                selected_idx,
                 X,
                 self.save_dir,
                 stage,
@@ -196,8 +209,6 @@ class MainController:
                             or method_name == "remove_outliers_pls"
                         ):
                             pr_x, pr_y = method(p_x, p_y, **param)
-                            
-                           
                         else:
                             pr_x = method(p_x, **param)
                             pr_y = p_y
@@ -245,47 +256,86 @@ class MainController:
 
     def feature_selection(self, X, y):
         """
-        Performs feature selection on the input data according to the specified method in the configuration.
+        Performs feature selection on the input data according to the specified methods in the configuration.
 
         Args:
             X (list): The input data.
             y (list): The target data.
 
         Returns:
-            numpy.ndarray: The selected features.
+            list: A list of selected feature matrices.
+            list: A list of corresponding target arrays.
         """
+        if "feature_selection" in self.config:
+            original_data = X
+            selected_X = X
+            selected_y = y
+            all_selected_idx = []
 
-        def _get_feature_selection_params():
-            if "feature_selection" in self.config:
-                method_name = self.config["feature_selection"].lower()
-                params = self.config.get("feature_params", {})
-                return method_name, params
-            return None, {}
+            feature_selection_params = self.config["feature_selection"]
 
-        method_name, selection_params = _get_feature_selection_params()
+            for selection_config in feature_selection_params:
+                method_name = selection_config["method"].lower()
+                method = getattr(FeatureSelection, method_name)
+                params = selection_config.get("params", {})
+                param_combinations = self._get_param_combinations(params)
 
-        if method_name:
-            method = getattr(FeatureSelection, method_name)
-            feature_selection_param_combinations = self._get_param_combinations(
-                selection_params
-            )
+                new_selected_X = []
+                new_selected_y = []
+                new_selected_idx = []
 
-            selected_data = []
-            selected_target = []
-            for idx, params in enumerate(feature_selection_param_combinations):
-                for data, target in zip(X, y):
-                    if method_name in ["pca", "spa"]:
-                        single_selected_data = method(data, **params)
-                    else:
-                        single_selected_data = method(data, target, **params)
-                    selected_data.append(single_selected_data)
-                    selected_target.append(target)
+                for param in param_combinations:
+                    selected_data = []
+                    selected_target = []
+                    selected_idx = []
 
-            if self.plot_data:
-                for idx, single_selected_data in enumerate(selected_data):
-                    self.draw_data(single_selected_data, f"feature_selection_{idx+1}")
+                    for data, target in zip(selected_X, selected_y):
+                        if method_name in ["pca", "spa"]:
+                            single_selected_data, single_selected_idx = method(
+                                data, **param
+                            )
+                        else:
+                            single_selected_data, single_selected_idx = method(
+                                data, target, **param
+                            )
 
-            return selected_data, selected_target
+                        selected_data.append(single_selected_data)
+                        selected_target.append(target)
+
+                        if len(all_selected_idx) < len(original_data):
+                            selected_idx.append(single_selected_idx)
+                        else:
+                            previous_indices = all_selected_idx[-len(original_data)]
+                            current_selected_indices = [
+                                previous_indices[i] for i in single_selected_idx
+                            ]
+                            selected_idx.append(current_selected_indices)
+
+                    new_selected_X.extend(selected_data)
+                    new_selected_y.extend(selected_target)
+                    new_selected_idx.extend(selected_idx)
+
+                selected_X = new_selected_X
+                selected_y = new_selected_y
+                all_selected_idx.extend(new_selected_idx)
+
+                if self.plot_data:
+                    for idx, (
+                        x,
+                        single_selected_data,
+                        single_selected_idx,
+                    ) in enumerate(
+                        zip(
+                            itertools.cycle(original_data), selected_X, new_selected_idx
+                        )
+                    ):
+                        self.draw_data(
+                            x,
+                            f"feature_selection_{method_name}_{idx+1}",
+                            single_selected_idx,
+                            single_selected_data,
+                        )
+            return selected_X, selected_y
         return X, y
 
     def _get_param_combinations(self, config):
