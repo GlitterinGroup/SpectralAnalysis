@@ -32,6 +32,7 @@ SpectralAnalysis/
 │   │   ├── pls.py
 │   │   ├── rf.py
 │   │   ├── svm.py
+│   │   ├── lssvm.py
 │   │   └── svr.py
 │   ├── draw.py
 │   └── metrics.py
@@ -39,14 +40,15 @@ SpectralAnalysis/
     ├── data/
     │   ├── wl_0884.xlsx
     │   ├── wl_1899.xlsx
-    │   └── xxx.xlsx
+    │   └── xxxx.xlsx
     ├── config/
     │   └── xxx.yaml      
     ├── result/
     │   └──xxx
-    │      └── YYYYMMDD_HHMM
-    │           ├── result.csv
-    │           └── xxxxxx.png
+    │      └── xxxx
+    │          └── YYYYMMDD_HHMM
+    │               ├── result.csv
+    │               └── xxxxx.png
     ├── README.md
     ├── analyse.py           
     ├── main_controller.py
