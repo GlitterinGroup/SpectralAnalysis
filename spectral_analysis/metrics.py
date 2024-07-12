@@ -1,5 +1,7 @@
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import (accuracy_score, f1_score, mean_absolute_error,
+                             mean_squared_error, precision_score, r2_score,
+                             recall_score, roc_auc_score)
 
 
 class Metrics:
@@ -156,7 +158,7 @@ class Metrics:
         return sd / rmsep
 
     @staticmethod
-    def calculate_metrics(y_true_train, y_pred_train, y_true_test, y_pred_test):
+    def calculate_regression_metrics(y_true_train, y_pred_train, y_true_test, y_pred_test):
         """
         Calculate multiple metrics and return them in a dictionary.
 
@@ -192,3 +194,105 @@ class Metrics:
             "RMSEP": Metrics.calculate_rmsep(y_true_test, y_pred_test),
             "RPD": Metrics.calculate_rpd(y_true_test, y_pred_test),
         }
+
+    @staticmethod
+    def calculate_accuracy(y_true, y_pred):
+        """
+        Calculate accuracy score.
+
+        Args:
+            y_true (array-like): True labels.
+            y_pred (array-like): Predicted labels.
+
+        Returns:
+            float: Accuracy score.
+        """
+        return accuracy_score(y_true, y_pred)
+
+    @staticmethod
+    def calculate_precision(y_true, y_pred, average='binary'):
+        """
+        Calculate precision score.
+
+        Args:
+            y_true (array-like): True labels.
+            y_pred (array-like): Predicted labels.
+            average (str, optional): Type of averaging performed on the data. 
+                Defaults to 'binary'. Options: ['binary', 'micro', 'macro', 'samples', 'weighted'].
+
+        Returns:
+            float: Precision score.
+        """
+        return precision_score(y_true, y_pred, average=average)
+
+    @staticmethod
+    def calculate_recall(y_true, y_pred, average='binary'):
+        """
+        Calculate recall score.
+
+        Args:
+            y_true (array-like): True labels.
+            y_pred (array-like): Predicted labels.
+            average (str, optional): Type of averaging performed on the data. 
+                Defaults to 'binary'. Options: ['binary', 'micro', 'macro', 'samples', 'weighted'].
+
+        Returns:
+            float: Recall score.
+        """
+        return recall_score(y_true, y_pred, average=average)
+
+    @staticmethod
+    def calculate_f1(y_true, y_pred, average='binary'):
+        """
+        Calculate F1 score.
+
+        Args:
+            y_true (array-like): True labels.
+            y_pred (array-like): Predicted labels.
+            average (str, optional): Type of averaging performed on the data. 
+                Defaults to 'binary'. Options: ['binary', 'micro', 'macro', 'samples', 'weighted'].
+
+        Returns:
+            float: F1 score.
+        """
+        return f1_score(y_true, y_pred, average=average)
+
+    @staticmethod
+    def calculate_auc_roc(y_true, y_pred_proba):
+        """
+        Calculate Area Under the Receiver Operating Characteristic Curve (ROC AUC).
+
+        Args:
+            y_true (array-like): True labels.
+            y_pred_proba (array-like): Predicted probabilities.
+
+        Returns:
+            float: ROC AUC score.
+        """
+        return roc_auc_score(y_true, y_pred_proba)
+
+    @staticmethod
+    def calculate_classification_metrics(y_true, y_pred, y_pred_proba=None, average='binary'):
+        """
+        Calculate various classification metrics.
+
+        Args:
+            y_true (array-like): True labels.
+            y_pred (array-like): Predicted labels.
+            y_pred_proba (array-like, optional): Predicted probabilities. Defaults to None.
+            average (str, optional): Type of averaging performed on the data. 
+                Defaults to 'binary'. Options: ['binary', 'micro', 'macro', 'samples', 'weighted'].
+
+        Returns:
+            dict: Dictionary of classification metrics, including accuracy, precision, recall, F1 score,
+                and optionally ROC AUC if `y_pred_proba` is provided.
+        """
+        metrics = {
+            "accuracy": Metrics.calculate_accuracy(y_true, y_pred),
+            "precision": Metrics.calculate_precision(y_true, y_pred, average=average),
+            "recall": Metrics.calculate_recall(y_true, y_pred, average=average),
+            "f1": Metrics.calculate_f1(y_true, y_pred, average=average)
+        }
+        if y_pred_proba is not None:
+            metrics["auc_roc"] = Metrics.calculate_auc_roc(y_true, y_pred_proba)
+        return metrics

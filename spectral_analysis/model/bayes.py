@@ -1,4 +1,5 @@
 from sklearn.linear_model import BayesianRidge
+from sklearn.naive_bayes import GaussianNB
 
 
 class BAYESRegression(BayesianRidge):
@@ -42,5 +43,45 @@ class BAYESRegression(BayesianRidge):
 
         Returns:
             array-like: Predicted values, shape (n_samples,).
+        """
+        return super().predict(X)
+
+class BAYESClassifier(GaussianNB):
+    """
+    A classifier that extends the Gaussian Naive Bayes classifier.
+
+    Methods:
+        train(X, y): Train the classifier with input data X and labels y.
+        predict(X): Predict the labels for the input data X.
+    """
+    
+    def __init__(self, **kwargs):
+        """
+        Initialize the BAYESClassifier.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to the GaussianNB initializer.
+        """
+        super().__init__(**kwargs)
+    
+    def train(self, X, y):
+        """
+        Train the classifier with input data and labels.
+
+        Args:
+            X (array-like): Training data.
+            y (array-like): Target labels.
+        """
+        self.fit(X, y)
+    
+    def predict(self, X):
+        """
+        Predict the labels for the input data.
+
+        Args:
+            X (array-like): Input data for which to predict labels.
+
+        Returns:
+            array: Predicted labels for the input data.
         """
         return super().predict(X)
